@@ -241,3 +241,37 @@ security_group_id = aws_security_group.roheem-lb-sg.id
   ip_protocol = -1
   to_port     = 0
 }
+
+// Target Group Resource
+resource "aws_lb_target_group" "roheem-ubuntu-tg" {
+  name     = "roheem-ubuntu-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.roheem-vpc.id
+  health_check {
+  path                = "/"
+  interval            = 30
+  timeout             = 5
+  healthy_threshold   = 2
+  unhealthy_threshold = 2
+  }
+}
+
+// Listener Attachment to ALB
+resource "aws_lb_listener" "roheem-listener" {
+  load_balancer_arn = aws_lb.roheem-alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.roheem-ubuntu-tg.arn
+  }
+}
+
+// Target Group | Targets Registration Resource
+resource "aws_lb_target_group_attachment" "roheem-targetgroup-target" {
+  target_group_arn = aws_lb_target_group.roheem-ubuntu-tg.arn
+  target_id        = aws_instance.roheem-ec2.id
+  port             = 80
+}
