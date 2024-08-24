@@ -163,3 +163,40 @@ resource "aws_instance" "roheem-ec2" {
     managedBy = "roheem.olayemi@cecureintel.com"
   }
 }
+
+// Ubuntu Server Security Group Resource
+resource "aws_security_group" "roheem-server-sg" {
+  vpc_id      = aws_vpc.roheem-vpc.id
+  tags = {
+    Name = "Ubuntu-ServerSG",
+    managedBy = "roheem.olayemi@cecureintel.com"
+  }
+}
+
+// Inbound Rule (SSH) Security Group Resource for EC2
+resource "aws_vpc_security_group_ingress_rule" "server-inbound-rule-ssh" {
+  security_group_id = aws_security_group.roheem-server-sg.id
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 22
+  ip_protocol = "tcp"
+  to_port     = 22
+}
+
+// Inbound Rule (HTTP) Security Group Resource for EC2 Allow traffic via the Load Balancer alone
+resource "aws_security_group_rule" "allow_lb_only" {
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.roheem-lb-sg.id  
+  security_group_id        = aws_security_group.roheem-server-sg.id 
+}
+
+// Outbound Rule Security Group Resource
+resource "aws_vpc_security_group_egress_rule" "server-outbound-rule" {
+  security_group_id = aws_security_group.roheem-server-sg.id
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 0
+  ip_protocol = -1
+  to_port     = 0
+}
