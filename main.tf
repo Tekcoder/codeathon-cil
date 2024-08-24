@@ -118,3 +118,160 @@ resource "aws_route_table_association" "roheem-private-route-table-association" 
   subnet_id      = aws_subnet.roheem-private-subnet.id
   route_table_id = aws_route_table.roheem-private-route-table.id
 }
+
+resource "aws_iam_role" "roheem-ec2-ssm-role" {
+  name = "roheem-ec2-ssm-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+
+  tags = {
+    tag-key = "roheem-ee2-ssm-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ec2-role-policy-attachment" {
+  role       = aws_iam_role.roheem-ec2-ssm-role.name
+  # policy_arn = aws_iam_policy.roheem-ec2-ssm-policy.arn
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "roheem-ec2-ssm-profile" {
+  name = "roheem-ec2-ssm-profile"
+  role = aws_iam_role.roheem-ec2-ssm-role.name
+}
+
+// Ubuntu EC2 Instance Resource
+resource "aws_instance" "roheem-ec2" {
+  ami                     = "ami-04a81a99f5ec58529"
+  instance_type           = "t2.micro"
+  subnet_id = aws_subnet.roheem-private-subnet.id
+  vpc_security_group_ids = [aws_security_group.roheem-server-sg.id]
+  iam_instance_profile = aws_iam_instance_profile.roheem-ec2-ssm-profile.name
+    tags = {
+    Name = "roheem-server",
+    managedBy = "roheem.olayemi@cecureintel.com"
+  }
+}
+
+// Ubuntu Server Security Group Resource
+resource "aws_security_group" "roheem-server-sg" {
+  vpc_id      = aws_vpc.roheem-vpc.id
+  tags = {
+    Name = "Ubuntu-ServerSG",
+    managedBy = "roheem.olayemi@cecureintel.com"
+  }
+}
+
+// Inbound Rule (SSH) Security Group Resource for EC2
+resource "aws_vpc_security_group_ingress_rule" "server-inbound-rule-ssh" {
+  security_group_id = aws_security_group.roheem-server-sg.id
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 22
+  ip_protocol = "tcp"
+  to_port     = 22
+}
+
+// Inbound Rule (HTTP) Security Group Resource for EC2 Allow traffic via the Load Balancer alone
+resource "aws_security_group_rule" "allow_lb_only" {
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.roheem-lb-sg.id  
+  security_group_id        = aws_security_group.roheem-server-sg.id 
+}
+
+// Outbound Rule Security Group Resource
+resource "aws_vpc_security_group_egress_rule" "server-outbound-rule" {
+  security_group_id = aws_security_group.roheem-server-sg.id
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 0
+  ip_protocol = -1
+  to_port     = 0
+}
+
+// Load Balancer Resource
+resource "aws_lb" "roheem-alb" {
+  name               = "roheem-alb-ubuntu"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.roheem-lb-sg.id]
+  subnets            = [aws_subnet.roheem-public-subnet1.id, aws_subnet.roheem-public-subnet2.id]
+
+  tags = {
+    Name = "roheem-alb-ubuntu",
+    managedBy = "roheem.olayemi@cecureintel.com"
+  }
+}
+
+// Load Balancer Security Group 
+resource "aws_security_group" "roheem-lb-sg" {
+  vpc_id      = aws_vpc.roheem-vpc.id
+  tags = {
+    Name = "Load-Balancer-SG",
+    managedBy = "roheem.olayemi@cecureintel.com"
+  }
+}
+
+// Inbound Rule (HTTP) Load Balancer Security Group Security Group Resource
+resource "aws_vpc_security_group_ingress_rule" "lb-inbound-rule" {
+  security_group_id = aws_security_group.roheem-lb-sg.id
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 80
+  ip_protocol = "tcp"
+  to_port     = 80
+}
+
+// Outbound Rule Load Balancer Security Group Resource
+resource "aws_vpc_security_group_egress_rule" "lb-outbound-rule" {
+security_group_id = aws_security_group.roheem-lb-sg.id
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 0
+  ip_protocol = -1
+  to_port     = 0
+}
+
+// Target Group Resource
+resource "aws_lb_target_group" "roheem-ubuntu-tg" {
+  name     = "roheem-ubuntu-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.roheem-vpc.id
+  health_check {
+  path                = "/"
+  interval            = 30
+  timeout             = 5
+  healthy_threshold   = 2
+  unhealthy_threshold = 2
+  }
+}
+
+// Listener Attachment to ALB
+resource "aws_lb_listener" "roheem-listener" {
+  load_balancer_arn = aws_lb.roheem-alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.roheem-ubuntu-tg.arn
+  }
+}
+
+// Target Group | Targets Registration Resource
+resource "aws_lb_target_group_attachment" "roheem-targetgroup-target" {
+  target_group_arn = aws_lb_target_group.roheem-ubuntu-tg.arn
+  target_id        = aws_instance.roheem-ec2.id
+  port             = 80
+}
