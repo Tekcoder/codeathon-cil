@@ -200,3 +200,44 @@ resource "aws_vpc_security_group_egress_rule" "server-outbound-rule" {
   ip_protocol = -1
   to_port     = 0
 }
+
+// Load Balancer Resource
+resource "aws_lb" "roheem-alb" {
+  name               = "roheem-alb-ubuntu"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.roheem-lb-sg.id]
+  subnets            = [aws_subnet.roheem-public-subnet1.id, aws_subnet.roheem-public-subnet2.id]
+
+  tags = {
+    Name = "roheem-alb-ubuntu",
+    managedBy = "roheem.olayemi@cecureintel.com"
+  }
+}
+
+// Load Balancer Security Group 
+resource "aws_security_group" "roheem-lb-sg" {
+  vpc_id      = aws_vpc.roheem-vpc.id
+  tags = {
+    Name = "Load-Balancer-SG",
+    managedBy = "roheem.olayemi@cecureintel.com"
+  }
+}
+
+// Inbound Rule (HTTP) Load Balancer Security Group Security Group Resource
+resource "aws_vpc_security_group_ingress_rule" "lb-inbound-rule" {
+  security_group_id = aws_security_group.roheem-lb-sg.id
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 80
+  ip_protocol = "tcp"
+  to_port     = 80
+}
+
+// Outbound Rule Load Balancer Security Group Resource
+resource "aws_vpc_security_group_egress_rule" "lb-outbound-rule" {
+security_group_id = aws_security_group.roheem-lb-sg.id
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 0
+  ip_protocol = -1
+  to_port     = 0
+}
