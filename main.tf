@@ -118,3 +118,48 @@ resource "aws_route_table_association" "roheem-private-route-table-association" 
   subnet_id      = aws_subnet.roheem-private-subnet.id
   route_table_id = aws_route_table.roheem-private-route-table.id
 }
+
+resource "aws_iam_role" "roheem-ec2-ssm-role" {
+  name = "roheem-ec2-ssm-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+
+  tags = {
+    tag-key = "roheem-ee2-ssm-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ec2-role-policy-attachment" {
+  role       = aws_iam_role.roheem-ec2-ssm-role.name
+  # policy_arn = aws_iam_policy.roheem-ec2-ssm-policy.arn
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "roheem-ec2-ssm-profile" {
+  name = "roheem-ec2-ssm-profile"
+  role = aws_iam_role.roheem-ec2-ssm-role.name
+}
+
+// Ubuntu EC2 Instance Resource
+resource "aws_instance" "roheem-ec2" {
+  ami                     = "ami-04a81a99f5ec58529"
+  instance_type           = "t2.micro"
+  subnet_id = aws_subnet.roheem-private-subnet.id
+  vpc_security_group_ids = [aws_security_group.roheem-server-sg.id]
+  iam_instance_profile = aws_iam_instance_profile.roheem-ec2-ssm-profile.name
+    tags = {
+    Name = "roheem-server",
+    managedBy = "roheem.olayemi@cecureintel.com"
+  }
+}
