@@ -26,6 +26,8 @@
 
 `Draw the architecture diagram of this set up`
 
+![Project Infrastructure](././images/architecture.png)
+
 `This repository content contains all the code necessary to deploy the following resources:` 
 
 `1) VPC Create`
